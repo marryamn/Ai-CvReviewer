@@ -1,5 +1,6 @@
 import { Injectable, UnsupportedMediaTypeException } from '@nestjs/common';
 import * as pdfParse from 'pdf-parse';
+import * as natural from 'natural';
 @Injectable()
 export class AppService {
   getHello(): string {
@@ -54,11 +55,32 @@ export class AppService {
   }
 
   private getNlpSuggestions(text: string) {
-    // TODO: Implement your own heuristic or NLP-based approach
-    return [
-      'Check grammar and spelling.',
-      'Highlight programming languages more clearly.',
-      'Emphasize achievements rather than responsibilities.',
-    ];
+    const tokenizer = new natural.WordTokenizer();
+    const tokens = tokenizer.tokenize(text.toLowerCase());
+
+    // Example: check if certain keywords are missing
+    const requiredKeywords = ['javascript', 'nestjs', 'node.js'];
+    const missingKeywords = requiredKeywords.filter(
+      (kw) => !tokens.includes(kw.toLowerCase()),
+    );
+
+    const suggestions = [];
+    if (missingKeywords.length > 0) {
+      suggestions.push(
+        `Consider adding the following relevant keywords: ${missingKeywords.join(
+          ', ',
+        )}.`,
+      );
+    }
+
+    // Simple heuristic for word count:
+    if (tokens.length < 100) {
+      suggestions.push('Your CV might be too short. Add more details.');
+    } else if (tokens.length > 800) {
+      suggestions.push('Your CV might be too long. Try to be more concise.');
+    }
+
+    // Add more rules or use other NLP features
+    return suggestions;
   }
 }
