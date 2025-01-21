@@ -2,9 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as TelegramBot from 'node-telegram-bot-api';
 import { TEST_USER } from './telegram.constant';
 import axios from 'axios';
-import { createWriteStream } from 'fs';
 import * as path from 'path';
 const TELEGRAM_TOKEN = '7388703557:AAEEngXGhabenHjFjlY8vptfJRQairUVes4';
+import { Readable } from 'stream'; // Import Node.js Readable stream type
+import { createWriteStream, existsSync, mkdirSync } from 'fs';
 @Injectable()
 export class TelegramService {
   private readonly bot: TelegramBot;
@@ -51,32 +52,30 @@ export class TelegramService {
   /**
    * Download a file from the given URL and save it locally
    */
-  private async downloadFile(downloadUrl: string, fileName?: string) {
-    // You can choose any local path. Using "uploads" folder here as an example.
-    // In real projects, ensure the folder exists or handle errors accordingly.
-    const savePath = path.join(__dirname, '..', 'uploads', fileName ?? 'file');
+  private async downloadFile(downloadUrl: string, fileName: string) {
+    const savePath = path.join(__dirname, '..', 'uploads', fileName);
+    const directory = path.dirname(savePath);
+    if (!existsSync(directory)) {
+      mkdirSync(directory, { recursive: true }); // Create the directory if it doesn't exist
+    }
 
-    // Make a GET request for the file, expecting a stream as response
-    const response = await axios.get<ReadableStream>(downloadUrl, {
-      responseType: 'stream',
-    });
+    try {
+      // Make the HTTP request and ensure response.data is treated as a Node.js stream
+      const response = await axios.get<Readable>(downloadUrl, { responseType: 'stream' });
 
-    // Pipe the response data (file stream) into a local file
-    const writer = createWriteStream(savePath);
+      // Create a write stream for the destination file
+      const writer = createWriteStream(savePath);
 
-    // Promisify the stream end
-    return new Promise<void>((resolve, reject) => {
-      response.data.pipe(writer);
-
-      writer.on('finish', () => {
-        this.logger.log(`Saved file to ${savePath}`);
-        resolve();
+      // Pipe the readable stream to the writable stream
+      await new Promise<void>((resolve, reject) => {
+        response.data.pipe(writer);
+        writer.on('finish', resolve);
+        writer.on('error', reject);
       });
 
-      writer.on('error', (err) => {
-        this.logger.error(`Failed to write file: ${err.message}`);
-        reject(err);
-      });
-    });
+      console.log(`File saved to ${savePath}`);
+    } catch (error) {
+      console.error(`Failed to download file: ${error.message}`);
+    }
   }
 }
